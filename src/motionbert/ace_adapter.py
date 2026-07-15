@@ -1,27 +1,17 @@
+"""Convert MotionBERT 3D skeleton output into the canonical ACE marker dictionary."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import numpy as np
 
+from src.markers.io import ACE_MARKER_NAMES, save_serve_markers
 from src.motionbert.motionbert_runner import MOTIONBERT_JOINT_NAMES
 
-ACE_MARKER_NAMES = (
-    "head",
-    "chest",
-    "left_shoulder",
-    "right_shoulder",
-    "left_elbow",
-    "right_elbow",
-    "left_hand",
-    "right_hand",
-    "left_hip",
-    "right_hip",
-    "left_knee",
-    "right_knee",
-    "left_foot",
-    "right_foot",
-)
+# Normalized skeleton coordinates use shoulder width ~= 1.0.
+# Scale to approximate Vicon millimetre units so segmentation thresholds apply.
+DEFAULT_VICON_MM_SCALE = 400.0
 
 ACE_TO_MOTIONBERT = {
     "head": "head",
@@ -55,13 +45,19 @@ def motionbert_to_ace_markers(
     poses_3d: np.ndarray,
     *,
     frame_start: int = 1,
-    scale: float = 1.0,
+    scale: float = DEFAULT_VICON_MM_SCALE,
 ) -> dict[str, dict[str, np.ndarray] | np.ndarray]:
     """Convert 17-joint MotionBERT output into ACE's Vicon marker dictionary.
 
-    The existing Vicon animation code expects marker axes named TX/TY/TZ. MotionBERT
-    uses image-like Y coordinates, so map vertical motion onto ACE's Z axis.
-    Pass ``scale`` when you want to enlarge normalized model coordinates.
+    Expects **normalized** skeleton input (``normalize_skeleton`` output) where
+    canonical Y points up (head Y > foot Y).
+
+    Coordinate mapping (normalized body frame → ACE/Vicon axes):
+      TX ← X  (lateral)
+      TY ← Z  (depth)
+      TZ ← Y  (vertical; Vicon Z is up)
+
+    The returned dict matches ``load_single_serve()`` output exactly.
     """
     pose = _validate_pose_3d(poses_3d)
     frames = np.arange(frame_start, frame_start + pose.shape[0], dtype=int)
@@ -74,7 +70,7 @@ def motionbert_to_ace_markers(
         markers[ace_name] = {
             "TX": coords[:, 0].astype(float),
             "TY": coords[:, 2].astype(float),
-            "TZ": (-coords[:, 1]).astype(float),
+            "TZ": coords[:, 1].astype(float),
         }
 
     return markers
@@ -86,37 +82,22 @@ def save_ace_markers(
     *,
     filename: str = "ace_markers.npz",
 ) -> Path:
-    out = Path(output_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    path = out / filename
-    arrays: dict[str, np.ndarray] = {"frames": np.asarray(markers["frames"])}
-    for marker in ACE_MARKER_NAMES:
-        marker_axes = markers[marker]
-        if not isinstance(marker_axes, dict):
-            raise ValueError(f"marker {marker} must contain TX/TY/TZ arrays")
-        for axis in ("TX", "TY", "TZ"):
-            arrays[f"{marker}_{axis}"] = np.asarray(marker_axes[axis], dtype=float)
-    np.savez(path, **arrays)
-    return path
+    """Persist markers; delegates to ``save_serve_markers()``."""
+    return save_serve_markers(output_dir, markers, filename=filename)
 
 
 def load_ace_markers(npz_path: str | Path) -> dict[str, dict[str, np.ndarray] | np.ndarray]:
-    loaded = np.load(npz_path)
-    markers: dict[str, dict[str, np.ndarray] | np.ndarray] = {"frames": loaded["frames"]}
-    for marker in ACE_MARKER_NAMES:
-        markers[marker] = {
-            "TX": loaded[f"{marker}_TX"],
-            "TY": loaded[f"{marker}_TY"],
-            "TZ": loaded[f"{marker}_TZ"],
-        }
-    return markers
+    """Load markers from NPZ; delegates to ``load_serve_markers()``."""
+    from src.markers.io import load_serve_markers
+
+    return load_serve_markers(npz_path)
 
 
 def convert_file_to_ace_markers(
     poses_3d_path: str | Path,
     *,
     output_dir: str | Path | None = None,
-    scale: float = 1.0,
+    scale: float = DEFAULT_VICON_MM_SCALE,
 ) -> Path:
     path = Path(poses_3d_path)
     out = Path(output_dir) if output_dir is not None else path.parent

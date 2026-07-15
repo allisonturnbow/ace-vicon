@@ -48,6 +48,7 @@ from skeleton_viz import (  # noqa: E402
     compute_axis_limits,
     draw_skeleton,
     load_serve_from_dir,
+    load_serve_markers,
     marker_color_map,
     marker_names,
 )
@@ -371,15 +372,22 @@ def save_animation_gif(
 
 
 def run_interactive_viewer(
-    serve_dir: str | Path,
+    serve_dir: str | Path | None = None,
     serve_name: str | None = None,
     *,
+    markers: dict | None = None,
     cli_speed: float | None = None,
 ) -> None:
     """Interactive 3D viewer: radio buttons select Full Serve or any phase."""
-    serve_dir = Path(serve_dir)
-    serve_name = serve_name or serve_dir.name
-    markers = load_serve_from_dir(str(serve_dir))
+    if markers is None:
+        if serve_dir is None:
+            raise ValueError("run_interactive_viewer requires serve_dir or markers")
+        serve_dir = Path(serve_dir)
+        serve_name = serve_name or serve_dir.name
+        markers = load_serve_markers(serve_dir)
+    else:
+        serve_name = serve_name or "serve"
+
     result = segment_for_viz(markers)
 
     fig = plt.figure(figsize=(13, 10))
@@ -519,7 +527,7 @@ def generate_serve_validation_assets(
     out = output_dir or (OUTPUT_ROOT / serve_name)
     out.mkdir(parents=True, exist_ok=True)
 
-    markers = load_serve_from_dir(str(serve_dir))
+    markers = load_serve_markers(str(serve_dir))
     result = segment_for_viz(markers)
     paths: dict[str, Path] = {}
 

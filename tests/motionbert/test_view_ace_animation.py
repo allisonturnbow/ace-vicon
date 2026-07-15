@@ -1,22 +1,39 @@
 import json
+import warnings
+from pathlib import Path
 
-from src.motionbert.view_ace_animation import (
-    _frame_index_for_elapsed,
-    _load_source_fps,
-    _timer_interval_ms,
-)
+import numpy as np
 
-
-def test_load_source_fps_reads_video_metadata_next_to_markers(tmp_path):
-    (tmp_path / "video_metadata.json").write_text(json.dumps({"fps": 59.94005994005994}))
-
-    assert _load_source_fps(tmp_path / "ace_markers.npz") == 59.94005994005994
+from src.markers.io import save_serve_markers
+from src.motionbert.ace_adapter import motionbert_to_ace_markers
+from src.motionbert.motionbert_runner import MOTIONBERT_JOINT_NAMES
+from src.motionbert.view_ace_animation import run_ace_animation
 
 
-def test_timer_interval_uses_source_video_fps():
-    assert _timer_interval_ms(59.94005994005994) == 17
+def _sample_markers(frames: int = 3) -> dict:
+    pose = np.zeros((frames, len(MOTIONBERT_JOINT_NAMES), 3), dtype=float)
+    return motionbert_to_ace_markers(pose, scale=1.0)
 
 
-def test_frame_index_for_elapsed_matches_video_duration():
-    assert _frame_index_for_elapsed(3.0, fps=60.0, speed=1, n_frames=360) == 180
-    assert _frame_index_for_elapsed(6.0, fps=60.0, speed=1, n_frames=360) == 0
+def test_run_ace_animation_delegates_to_standard_renderer(tmp_path, monkeypatch):
+    markers = _sample_markers()
+    save_serve_markers(tmp_path, markers)
+    called = {}
+
+    def fake_animation(loaded, title, *, speed=1):
+        called["title"] = title
+        called["frames"] = len(loaded["frames"])
+        called["speed"] = speed
+
+    monkeypatch.setattr(
+        "src.motionbert.view_ace_animation.run_full_serve_animation",
+        fake_animation,
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        run_ace_animation(tmp_path / "ace_markers.npz", title="demo", speed=2)
+
+    assert called["title"] == "demo"
+    assert called["frames"] == 3
+    assert called["speed"] == 2

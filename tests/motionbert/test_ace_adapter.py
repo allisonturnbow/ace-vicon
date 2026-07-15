@@ -31,28 +31,42 @@ def test_motionbert_to_ace_markers_returns_vicon_animation_contract():
         assert np.isfinite(markers[name]["TZ"]).all()
 
 
-def test_motionbert_to_ace_markers_maps_key_joints_to_video_upright_axes():
+def test_motionbert_to_ace_markers_maps_key_joints_to_vicon_axes():
     pose = _sample_pose_3d(frames=2)
-    markers = motionbert_to_ace_markers(pose)
+    markers = motionbert_to_ace_markers(pose, scale=1.0)
 
     head_idx = MOTIONBERT_JOINT_NAMES.index("head")
     right_wrist_idx = MOTIONBERT_JOINT_NAMES.index("right_wrist")
 
     assert markers["head"]["TX"][0] == pose[0, head_idx, 0]
     assert markers["right_hand"]["TY"][1] == pose[1, right_wrist_idx, 2]
-    assert markers["right_hand"]["TZ"][1] == -pose[1, right_wrist_idx, 1]
+    assert markers["right_hand"]["TZ"][1] == pose[1, right_wrist_idx, 1]
 
 
 def test_motionbert_to_ace_markers_puts_head_above_chest_on_z_axis():
     pose = np.zeros((1, len(MOTIONBERT_JOINT_NAMES), 3), dtype=float)
     head_idx = MOTIONBERT_JOINT_NAMES.index("head")
     chest_idx = MOTIONBERT_JOINT_NAMES.index("thorax")
-    pose[0, head_idx] = [0.0, -1.0, 0.0]
+    pose[0, head_idx] = [0.0, 1.0, 0.0]
     pose[0, chest_idx] = [0.0, 0.0, 0.0]
 
-    markers = motionbert_to_ace_markers(pose)
+    markers = motionbert_to_ace_markers(pose, scale=1.0)
 
     assert markers["head"]["TZ"][0] > markers["chest"]["TZ"][0]
+
+
+def test_motionbert_to_ace_markers_puts_head_above_feet_on_z_axis():
+    """Normalized skeleton has Y-up; Vicon TZ must match (head higher than feet)."""
+    pose = np.zeros((1, len(MOTIONBERT_JOINT_NAMES), 3), dtype=float)
+    pose[0, MOTIONBERT_JOINT_NAMES.index("head")] = [0.0, 2.0, 0.0]
+    pose[0, MOTIONBERT_JOINT_NAMES.index("thorax")] = [0.0, 1.5, 0.0]
+    pose[0, MOTIONBERT_JOINT_NAMES.index("left_ankle")] = [0.0, -2.0, 0.0]
+    pose[0, MOTIONBERT_JOINT_NAMES.index("right_ankle")] = [0.0, -2.0, 0.0]
+
+    markers = motionbert_to_ace_markers(pose, scale=1.0)
+
+    assert markers["head"]["TZ"][0] > markers["left_foot"]["TZ"][0]
+    assert markers["head"]["TZ"][0] > markers["right_foot"]["TZ"][0]
 
 
 def test_save_ace_markers_writes_reusable_npz(tmp_path):

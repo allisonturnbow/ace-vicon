@@ -310,7 +310,7 @@ def run_motionbert_stage(
     motionbert_dir: str | Path = DEFAULT_MOTIONBERT_DIR,
     checkpoint_path: str | Path | None = DEFAULT_MOTIONBERT_CHECKPOINT,
     video_path: str | Path | None = None,
-) -> Path:
+) -> dict:
     out = Path(output_dir)
     poses_2d_path = out / "poses_2d.npy"
     if not poses_2d_path.is_file():
@@ -372,8 +372,9 @@ def run_motionbert_stage(
     save_feature_sequence(out, extract_features(normalized_skeleton))
     from src.motionbert.ace_adapter import motionbert_to_ace_markers, save_ace_markers
 
-    save_ace_markers(out, motionbert_to_ace_markers(normalized_skeleton.joint_positions))
-    return out / "poses_3d.npy"
+    markers = motionbert_to_ace_markers(normalized_skeleton.joint_positions)
+    save_ace_markers(out, markers)
+    return markers
 
 
 def main() -> None:
@@ -387,7 +388,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", default=str(DEFAULT_MOTIONBERT_CHECKPOINT))
     parser.add_argument("--video-path", default=None)
     args = parser.parse_args()
-    out = run_motionbert_stage(
+    markers = run_motionbert_stage(
         args.output_dir,
         backend=args.backend,
         motionbert_command=args.motionbert_command,
@@ -395,7 +396,7 @@ def main() -> None:
         checkpoint_path=args.checkpoint,
         video_path=args.video_path,
     )
-    print(f"Saved 3D pose output to {out}")
+    print(f"Saved ACE markers ({len(markers['frames'])} frames)")
 
 
 if __name__ == "__main__":

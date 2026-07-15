@@ -1,20 +1,19 @@
-"""Shared 3D skeleton drawing for ACE Vicon marker serves."""
+"""Shared 3D skeleton drawing for ACE marker serves (Vicon or MotionBERT)."""
 
 from __future__ import annotations
 
-import glob
-import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-_DTW_DIR = os.path.join(os.path.dirname(__file__), "..", "dtw")
-if _DTW_DIR not in sys.path:
-    sys.path.insert(0, _DTW_DIR)
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-from load_data import FILENAME_TO_MARKER, load_single_serve  # noqa: E402
+from src.markers.io import load_serve_markers  # noqa: E402
 
 BONES: list[tuple[str, str]] = [
     ("head", "chest"),
@@ -38,13 +37,8 @@ DEFAULT_INTERVAL_MS = 33
 
 
 def load_serve_from_dir(serve_dir: str) -> dict[str, Any]:
-    marker_dict = {}
-    for csv_path in glob.glob(os.path.join(serve_dir, "*.csv")):
-        stem = os.path.splitext(os.path.basename(csv_path))[0].lower()
-        marker_name = FILENAME_TO_MARKER.get(stem)
-        if marker_name:
-            marker_dict[marker_name] = csv_path
-    return load_single_serve(marker_dict)
+    """Load ACE markers from a Vicon CSV folder (alias for ``load_serve_markers``)."""
+    return load_serve_markers(serve_dir)
 
 
 def marker_names(markers: dict) -> list[str]:
