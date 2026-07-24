@@ -331,6 +331,17 @@ def grade_serve(customer_path: str, reference_path: str) -> dict:
     return results
 
 
+def grade_serve_to_scoring_report(customer_path: str, reference_path: str):
+    """Run snapshot comparison and emit the canonical format/data ScoringReport.
+
+    Scoring math stays in ``grade_serve``; this only adapts the result dict into
+    the ScoringReport schema expected by the Coaching Engine.
+    """
+    from format.data.snapshot_report import scoring_report_from_snapshot_grade
+
+    return scoring_report_from_snapshot_grade(grade_serve(customer_path, reference_path))
+
+
 # ─────────────────────────────────────────────
 # 6. REPORT PRINTER
 # ─────────────────────────────────────────────

@@ -5,14 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.coaching_engine import CoachingEngine
+from format.pipeline import coaching_report_from_scoring_report
 from src.coaching_engine.models import CoachingRecommendation, CoachingReport
 from src.coaching_viewer.recommendations import top_recommendations
 from src.coaching_viewer.scalars import extract_feature_scalars
 from src.dtw.alignment import ServeComparison
 from src.dtw.phase_dtw import segment_and_compare
 from src.scoring_engine import ScoringEngine
-from src.scoring_report_reader import ScoringReportReader
 from src.scoring_report_reader.report import FeatureSummary, ScoringReport
 
 
@@ -85,9 +84,34 @@ def run(
     )
 
     scoring_report = ScoringEngine().score(player_scalars, reference_scalars)
-    context = ScoringReportReader(max_secondary=2).read(scoring_report)
-    coaching_report = CoachingEngine.with_default_library().generate(context)
+    coaching_report = coaching_report_from_scoring_report(scoring_report, max_secondary=2)
 
+    return build_session_from_parts(
+        markers_player=markers_player,
+        markers_reference=markers_reference,
+        comparison=comparison,
+        scoring_report=scoring_report,
+        coaching_report=coaching_report,
+    )
+
+
+def run_from_scoring_report(
+    *,
+    markers_player: dict,
+    markers_reference: dict,
+    comparison: ServeComparison,
+    scoring_report: ScoringReport,
+    max_secondary: int = 2,
+) -> CoachingViewerSession:
+    """Build a viewer session from an existing canonical ScoringReport.
+
+    Used when scoring comes from the Snapshot Comparison Scoring Engine
+    (``format.data.ScoringReport``) instead of the DTW scalar ScoringEngine.
+    Coaching Engine and CoachingReport render models are unchanged.
+    """
+    coaching_report = coaching_report_from_scoring_report(
+        scoring_report, max_secondary=max_secondary
+    )
     return build_session_from_parts(
         markers_player=markers_player,
         markers_reference=markers_reference,
